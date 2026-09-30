@@ -155,9 +155,17 @@ class Slack:
         self.c, self.http = config, http
 
     def call(self, method, **body):
-        result = self.http.request('https://slack.com/api/' + method,
-                                  {'Authorization': 'Bearer ' + self.c.slack_token,
-                                   'Content-Type': 'application/json; charset=utf-8'}, body)
+        url = 'https://slack.com/api/' + method
+        headers = {'Authorization': 'Bearer ' + self.c.slack_token}
+        if method in ('conversations.info', 'users.info', 'conversations.replies'):
+            # Slack's read methods use GET query parameters, as in its official SDK.
+            # Keep the credential exclusively in the Authorization header.
+            params = {key: value for key, value in body.items() if value not in (None, '')}
+            query = urllib.parse.urlencode(params)
+            result = self.http.request(url + ('?' + query if query else ''), headers)
+        else:
+            headers['Content-Type'] = 'application/json; charset=utf-8'
+            result = self.http.request(url, headers, body)
         if result.get('ok') is not True:
             if result.get('error') == 'invalid_cursor':
                 raise InvalidCursor('Slack pagination cursor expired')

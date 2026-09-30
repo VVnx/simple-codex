@@ -15,6 +15,7 @@ import tempfile
 import unittest
 from unittest import mock
 import urllib.error
+import urllib.parse
 
 
 SPEC = importlib.util.spec_from_file_location(
@@ -215,7 +216,7 @@ class ApiContractTests(unittest.TestCase):
     def test_validate_checks_owner_team_existing_dm_and_dot_bot(self):
         self.http.request.side_effect = [self.valid_auth, self.valid_channel, self.valid_user]
         self.slack.validate()
-        self.assertEqual([call.args[0].rsplit("/", 1)[-1] for call in self.http.request.call_args_list],
+        self.assertEqual([urllib.parse.urlsplit(call.args[0]).path.rsplit("/", 1)[-1] for call in self.http.request.call_args_list],
                          ["auth.test", "conversations.info", "users.info"])
 
     def test_identity_mismatch_fails_before_any_post(self):
@@ -265,8 +266,34 @@ class ApiContractTests(unittest.TestCase):
     def test_replies_uses_15_item_pages_and_exact_thread_cursor(self):
         self.http.request.return_value = {"ok": True}
         self.slack.replies("1000.001", "next-page")
-        self.assertEqual(self.http.request.call_args.args[2],
-                         {"channel": "DDOT", "ts": "1000.001", "limit": 15, "cursor": "next-page"})
+        url, headers = self.http.request.call_args.args
+        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlsplit(url).query),
+                         {"channel": ["DDOT"], "ts": ["1000.001"], "limit": ["15"], "cursor": ["next-page"]})
+        self.assertNotIn("Content-Type", headers)
+
+    def test_read_methods_use_get_and_header_auth_with_encoded_arguments(self):
+        http = bridge.HTTP()
+        http.opener = mock.MagicMock()
+        response = http.opener.open.return_value.__enter__.return_value
+        response.read.return_value = b'{"ok":true}'
+        slack = bridge.Slack(self.config, http)
+        for method, params in [("conversations.info", {"channel": "DDOT"}),
+                               ("users.info", {"user": "UDOT"}),
+                               ("conversations.replies", {"channel": "DDOT", "ts": "1.2", "cursor": "a+/= b"})]:
+            with self.subTest(method=method):
+                slack.call(method, **params)
+                request = http.opener.open.call_args.args[0]
+                self.assertEqual(request.get_method(), "GET")
+                self.assertIsNone(request.data)
+                self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query),
+                                 {key: [value] for key, value in params.items()})
+                self.assertEqual(request.get_header("Authorization"), "Bearer xoxp-synthetic-test-token")
+                self.assertNotIn("xoxp", request.full_url)
+
+    def test_empty_reply_cursor_is_omitted_from_get_query(self):
+        self.http.request.return_value = {"ok": True}
+        self.slack.replies("1000.001", "")
+        self.assertNotIn("cursor", urllib.parse.parse_qs(urllib.parse.urlsplit(self.http.request.call_args.args[0]).query))
 
     def test_wechat_send_is_pinned_to_owner_and_context(self):
         self.http.request.return_value = {"ret": 0}
