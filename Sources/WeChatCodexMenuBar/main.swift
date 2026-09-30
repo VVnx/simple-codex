@@ -205,7 +205,7 @@ final class StatusBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             stateStore: stateStore,
             agent: agent,
             logger: { [weak self] message in
-                Task { @MainActor in self?.updateStatus(from: message) }
+                Task { @MainActor [weak self] in self?.updateStatus(from: message) }
             }
         )
         bridgeTask = Task { [weak self] in
