@@ -4,7 +4,8 @@ This **additional backend** runs on an always-on Linux host, independently of yo
 It forwards the configured WeChat owner's **text** into their **existing one-to-one dot
 Slack DM**, then relays only that dot's replies in the newly created Slack thread.
 Direct Slack chatting still works. It never starts Codex or creates a replacement dot.
-The original Swift CLI/menu-bar/Codex backend is unchanged.
+The original Swift CLI/menu-bar/Codex behavior is retained; a small explicit weak-capture
+compatibility fix lets its asynchronous callbacks compile with the CI Swift toolchain.
 
 ## What is and is not verified
 

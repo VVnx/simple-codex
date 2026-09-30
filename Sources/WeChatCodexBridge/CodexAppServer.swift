@@ -186,7 +186,8 @@ public actor CodexAppServer {
         child.standardOutput = standardOutput
         child.standardError = standardError
         child.terminationHandler = { [weak self] process in
-            Task { await self?.didTerminate(status: process.terminationStatus) }
+            let status = process.terminationStatus
+            Task { [weak self] in await self?.didTerminate(status: status) }
         }
         do { try child.run() }
         catch { throw CodexAppServerError.launch(error.localizedDescription) }
@@ -233,7 +234,7 @@ public actor CodexAppServer {
                 let data = outputHandle.availableData
                 guard !data.isEmpty else {
                     stream.continuation.finish()
-                    Task { await self?.readerEnded() }
+                    Task { [weak self] in await self?.readerEnded() }
                     return
                 }
                 do {
@@ -242,7 +243,7 @@ public actor CodexAppServer {
                     }
                 } catch {
                     stream.continuation.finish()
-                    Task { await self?.readerFailed() }
+                    Task { [weak self] in await self?.readerFailed() }
                     return
                 }
             }
