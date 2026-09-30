@@ -175,6 +175,13 @@ class TransportTests(unittest.TestCase):
                 with self.assertRaises(bridge.SafeError):
                     self.http.request("https://example.test", {})
 
+    def test_non_json_response_reports_safe_metadata_never_body(self):
+        response = self.respond(b"<html>secret-qr-or-server-content</html>")
+        response.status = 200
+        response.headers = {"Content-Type": "text/html; charset=utf-8"}
+        with self.assertRaisesRegex(bridge.SafeError, r"^API returned non-JSON response \(HTTP 200; content-type text/html\)$"):
+            self.http.request("https://example.test", {})
+
     def test_http_errors_hide_server_bodies_and_credentials(self):
         self.http.opener.open.side_effect = urllib.error.HTTPError(
             "https://example.test/?secret=hidden", 500, "sensitive body", {}, io.BytesIO(b"secret"))

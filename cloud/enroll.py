@@ -15,6 +15,7 @@ class Enrollment:
     def __init__(self, http, render, verify, confirm_owner, sleep=time.sleep):
         self.http, self.render, self.verify = http, render, verify
         self.confirm_owner, self.sleep = confirm_owner, sleep
+        self.stage = 'not started'
 
     def run(self):
         headers = {'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '132102',
@@ -22,6 +23,7 @@ class Enrollment:
                    'X-WECHAT-UIN': base64.b64encode(str(int.from_bytes(os.urandom(4), 'big')).encode()).decode()}
         redirects = 0
         for _ in range(4):
+            self.stage = 'QR creation POST'
             url = 'https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3'
             try:
                 # Current Tencent protocol and the original Swift client use POST.
@@ -31,6 +33,7 @@ class Enrollment:
                     raise
                 # Some deployed endpoints still expose GET. Only an explicit method
                 # rejection permits this fallback; never retry ambiguous failures.
+                self.stage = 'QR creation GET compatibility fallback'
                 qr = self.http.request(url, {'iLink-App-Id': 'bot',
                                             'iLink-App-ClientVersion': '132102'}, timeout=15)
             identifier, content = qr.get('qrcode'), qr.get('qrcode_img_content')
@@ -42,6 +45,7 @@ class Enrollment:
                 query = {'qrcode': identifier}
                 if code:
                     query['verify_code'] = code
+                self.stage = 'QR status polling'
                 response = self.http.request(base + '/ilink/bot/get_qrcode_status?' + urllib.parse.urlencode(query),
                                              {'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '132102'}, timeout=40)
                 code = None
@@ -108,8 +112,12 @@ def main():
     def confirm(owner):
         print('WeChat returned owner ID:', owner)
         return input('Confirm this is the account you just approved by typing YES: ').strip() == 'YES'
-    credentials = Enrollment(HTTP(), render,
-                             lambda: getpass.getpass('WeChat verification code: '), confirm).run()
+    flow = Enrollment(HTTP(), render,
+                      lambda: getpass.getpass('WeChat verification code: '), confirm)
+    try:
+        credentials = flow.run()
+    except SafeError as exc:
+        raise SafeError(flow.stage + ': ' + str(exc)) from None
     save_credentials(path, credentials)
     print('Credentials saved privately. Set WECHAT_CREDENTIALS_FILE to this file; never paste it into chat.')
 

@@ -56,7 +56,16 @@ class HTTP:
                 raw = response.read(1_048_577)
                 if len(raw) > 1_048_576:
                     raise SafeError('API response exceeds limit')
-                result = json.loads(raw)
+                try:
+                    result = json.loads(raw)
+                except (ValueError, UnicodeError):
+                    status = getattr(response, 'status', None)
+                    status = status if isinstance(status, int) else 'unknown'
+                    content_type = response.headers.get('Content-Type', '')
+                    content_type = content_type.split(';', 1)[0].strip().lower() if isinstance(content_type, str) else 'unknown'
+                    if content_type not in ('application/json', 'text/html', 'text/plain', 'application/octet-stream'):
+                        content_type = 'other'
+                    raise SafeError(f'API returned non-JSON response (HTTP {status}; content-type {content_type})') from None
                 if not isinstance(result, dict):
                     raise SafeError('Invalid API response')
                 return result

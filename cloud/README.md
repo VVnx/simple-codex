@@ -40,7 +40,8 @@ CLI, or incoming Slack bot needed.
    iLink QR/status protocol, including trusted redirects, expiry, verification codes,
    and an explicit confirmation of the returned owner. QR creation follows Tencent
    documentation with POST; an explicit HTTP 405 alone permits a legacy GET fallback.
-   Other HTTP/network failures stop without automatically creating another session. It refuses a missing owner
+   Other HTTP/network failures stop without automatically creating another session.
+   It refuses a missing owner
    instead of binding whoever sends the first message. Enrollment is not automatic
    and must only be run after the user's explicit sign-in/credential-storage approval.
    Never run old and new bridges simultaneously against the same bot/session.
@@ -121,6 +122,12 @@ OAuth, transferring secrets, or deploying elsewhere requires the relevant approv
   archive/reset only after accounting for all pending/paused/uncertain jobs. Never delete
   a live state volume to “fix” a retry, as that can replay tasks.
 
+If enrollment reports HTTP 200 with `text/html`, the endpoint returned a web page
+instead of the QR JSON contract. No QR/session should be inferred from that result.
+The CLI reports the stage and safe metadata without printing the response body;
+stop and investigate service/network availability rather than repeatedly retrying
+or routing around an access restriction.
+
 ## Recovery and inspection
 
 Stop the running container first; maintenance uses the same exclusive state lock:
@@ -156,3 +163,5 @@ swift test
 - [conversations.replies and scopes](https://docs.slack.dev/reference/methods/conversations.replies/)
 - [Web API rate limits](https://docs.slack.dev/apis/web-api/rate-limits/)
 - [Cursor pagination](https://docs.slack.dev/apis/web-api/pagination/)
+
+- [Tencent upstream iLink protocol](https://github.com/Tencent/openclaw-weixin/blob/main/docs/protocol.md)
