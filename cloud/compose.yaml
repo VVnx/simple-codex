@@ -1,0 +1,19 @@
+services:
+  bridge:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    volumes:
+      - bridge-state:/data
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    # No public ports, webhook ingress, Codex process, or desktop required.
+volumes:
+  bridge-state:

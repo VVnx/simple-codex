@@ -3,3 +3,15 @@
 dist/
 *.xcuserstate
 xcuserdata/
+
+# Cloud relay secrets and private durable state
+.env
+.env.*
+!.env.example
+cloud-state/
+__pycache__/
+*.pyc
+*.sqlite3
+*.sqlite3-*
+
+*wechat-credentials*.json

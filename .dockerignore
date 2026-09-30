@@ -1,0 +1,11 @@
+.git
+.env
+**/.env
+**/.env.*
+cloud-state
+**/*.sqlite3*
+**/__pycache__
+.build
+dist
+
+**/*wechat-credentials*.json

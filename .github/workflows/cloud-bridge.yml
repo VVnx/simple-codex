@@ -1,0 +1,23 @@
+name: Cloud bridge and legacy regression
+on:
+  push:
+    branches: [main, 'feat/cloud-wechat-slack']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  cloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s cloud/tests -v
+      - run: python -m py_compile cloud/bridge.py cloud/enroll.py
+      - run: docker build -f cloud/Dockerfile -t simple-codex-cloud .
+  legacy:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
