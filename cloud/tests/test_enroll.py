@@ -1,5 +1,7 @@
 """Offline enrollment tests. All identities are synthetic; no real API is called."""
 import base64
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
 import importlib.util
 import json
 import os
@@ -51,6 +53,80 @@ class ScriptedHTTP:
         if isinstance(response, BaseException):
             raise response
         return response
+
+
+class EnrollmentWireTests(unittest.TestCase):
+    """Real urllib HTTP requests to a loopback server, without mocked transport."""
+    def exercise(self, qr_post_status):
+        seen = []
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def respond(self, status, value):
+                data = json.dumps(value).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                seen.append(("POST", self.path, body, dict(self.headers)))
+                self.respond(qr_post_status, qr() if qr_post_status == 200 else {})
+
+            def do_GET(self):
+                seen.append(("GET", self.path, b"", dict(self.headers)))
+                self.respond(200, qr() if "/get_bot_qrcode?" in self.path else confirmed())
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        class LoopbackHTTP:
+            def request(self, url, headers, body=None, timeout=45):
+                parsed = urllib.parse.urlsplit(url)
+                if parsed.scheme != "https" or parsed.hostname != "ilinkai.weixin.qq.com":
+                    raise AssertionError("Unexpected production origin")
+                # Route only the test's hostname to its loopback protocol server.
+                local = "http://127.0.0.1:" + str(server.server_port) + parsed.path + "?" + parsed.query
+                return bridge.HTTP().request(local, headers, body, timeout)
+        try:
+            flow = enroll.Enrollment(LoopbackHTTP(), lambda _: None, lambda: "", lambda _: True, lambda _: None)
+            if qr_post_status not in (200, 405):
+                with self.assertRaises(bridge.HTTPStatusError) as caught:
+                    flow.run()
+                self.assertEqual(caught.exception.status, qr_post_status)
+            else:
+                self.assertEqual(flow.run(), credentials())
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join()
+        return seen
+
+    def test_documented_post_uses_actual_json_body_then_get_poll(self):
+        seen = self.exercise(200)
+        self.assertEqual([r[0] for r in seen], ["POST", "GET"])
+        self.assertEqual(seen[0][1], "/ilink/bot/get_bot_qrcode?bot_type=3")
+        self.assertEqual(json.loads(seen[0][2]), {"local_token_list": []})
+        self.assertEqual(seen[0][3]["Content-Type"], "application/json")
+        self.assertTrue(seen[1][1].startswith("/ilink/bot/get_qrcode_status?qrcode="))
+        self.assertTrue(all("Authorization" not in r[3] for r in seen))
+
+    def test_explicit_405_permits_one_bodyless_get_with_same_query(self):
+        seen = self.exercise(405)
+        self.assertEqual([r[0] for r in seen], ["POST", "GET", "GET"])
+        self.assertEqual(seen[1][1], seen[0][1])
+        self.assertEqual(seen[1][2], b"")
+        self.assertNotIn("Content-Type", seen[1][3])
+        self.assertNotIn("Authorizationtype", seen[1][3])
+        self.assertTrue(seen[2][1].startswith("/ilink/bot/get_qrcode_status?qrcode="))
+
+    def test_other_http_failures_never_fallback_or_poll(self):
+        for status in (400, 403, 500, 503):
+            with self.subTest(status=status):
+                self.assertEqual([r[0] for r in self.exercise(status)], ["POST"])
 
 
 class EnrollmentTests(unittest.TestCase):

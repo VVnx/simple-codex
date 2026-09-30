@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import time
 import urllib.parse
-from bridge import HTTP, SafeError, trusted_wechat
+from bridge import HTTP, HTTPStatusError, SafeError, trusted_wechat
 
 
 class Enrollment:
@@ -22,8 +22,17 @@ class Enrollment:
                    'X-WECHAT-UIN': base64.b64encode(str(int.from_bytes(os.urandom(4), 'big')).encode()).decode()}
         redirects = 0
         for _ in range(4):
-            qr = self.http.request('https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3',
-                                   headers, {'local_token_list': []}, timeout=15)
+            url = 'https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3'
+            try:
+                # Current Tencent protocol and the original Swift client use POST.
+                qr = self.http.request(url, headers, {'local_token_list': []}, timeout=15)
+            except HTTPStatusError as exc:
+                if exc.status != 405:
+                    raise
+                # Some deployed endpoints still expose GET. Only an explicit method
+                # rejection permits this fallback; never retry ambiguous failures.
+                qr = self.http.request(url, {'iLink-App-Id': 'bot',
+                                            'iLink-App-ClientVersion': '132102'}, timeout=15)
             identifier, content = qr.get('qrcode'), qr.get('qrcode_img_content')
             if any(not isinstance(v, str) or not 0 < len(v) <= 4096 for v in (identifier, content)):
                 raise SafeError('Invalid QR response')

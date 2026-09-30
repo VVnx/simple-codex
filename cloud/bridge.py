@@ -23,6 +23,12 @@ class SafeError(Exception):
     """Only fixed/sanitized descriptions may leave the transport layer."""
 
 
+class HTTPStatusError(SafeError):
+    def __init__(self, status):
+        self.status = status
+        super().__init__(f'HTTP {status}')
+
+
 class InvalidCursor(SafeError):
     pass
 
@@ -60,8 +66,11 @@ class HTTP:
                     seconds = int(exc.headers.get('Retry-After', '65'))
                 except ValueError:
                     seconds = 65
+                exc.close()
                 raise RateLimited(seconds) from None
-            raise SafeError(f'HTTP {exc.code}') from None
+            status = exc.code
+            exc.close()
+            raise HTTPStatusError(status) from None
         except (ValueError, OSError, urllib.error.URLError):
             raise SafeError('API transport or response failure') from None
 

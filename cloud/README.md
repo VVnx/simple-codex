@@ -38,7 +38,9 @@ CLI, or incoming Slack bot needed.
    not constrain this grant to a single DM. Review that scope before consenting.
 2. Enroll WeChat through the explicit cloud CLI below. It ports the original Swift
    iLink QR/status protocol, including trusted redirects, expiry, verification codes,
-   and an explicit confirmation of the returned owner. It refuses a missing owner
+   and an explicit confirmation of the returned owner. QR creation follows Tencent
+   documentation with POST; an explicit HTTP 405 alone permits a legacy GET fallback.
+   Other HTTP/network failures stop without automatically creating another session. It refuses a missing owner
    instead of binding whoever sends the first message. Enrollment is not automatic
    and must only be run after the user's explicit sign-in/credential-storage approval.
    Never run old and new bridges simultaneously against the same bot/session.
